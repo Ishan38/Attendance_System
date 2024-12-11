@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Attendance Management</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background: #007bff;
+            color: #fff;
+            padding: 10px 20px;
+            text-align: center;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        form input, button {
+            padding: 10px;
+            margin: 5px 0;
+            display: block;
+            width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        button {
+            background: #28a745;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #218838;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        table th, table td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+
+        table th {
+            background: #007bff;
+            color: #fff;
+        }
+
+        .attendance-btn {
+            background: #ffc107;
+            color: #fff;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .attendance-btn:hover {
+            background: #e0a800;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Student Attendance Management</h1>
+    </header>
+    <div class="container">
+        <input type="file" id="upload" accept=".xlsx, .xls">
+        <button id="download">Download Present Students</button>
+        <table id="student-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Grade</th>
+                    <th>Attendance</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Rows will be added dynamically here -->
+            </tbody>
+        </table>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script>
+        let presentStudents = [];
+
+        document.getElementById('upload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+                const table = document.getElementById('student-table').querySelector('tbody');
+                table.innerHTML = '';
+
+                jsonData.forEach(student => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${student.Name}</td>
+                        <td>${student.Grade}</td>
+                        <td><button class="attendance-btn">Mark Present</button></td>
+                    `;
+
+                    table.appendChild(row);
+
+                    const attendanceBtn = row.querySelector('.attendance-btn');
+                    attendanceBtn.addEventListener('click', function() {
+                        if (this.textContent === 'Mark Present') {
+                            this.textContent = 'Present';
+                            this.style.backgroundColor = '#28a745';
+                            presentStudents.push({ Name: student.Name, Grade: student.Grade });
+                        } else {
+                            this.textContent = 'Mark Present';
+                            this.style.backgroundColor = '#ffc107';
+                            presentStudents = presentStudents.filter(s => s.Name !== student.Name);
+                        }
+                    });
+                });
+            };
+
+            reader.readAsArrayBuffer(file);
+        });
+
+        document.getElementById('download').addEventListener('click', function() {
+            if (presentStudents.length === 0) {
+                alert('No students marked as present!');
+                return;
+            }
+
+            const worksheet = XLSX.utils.json_to_sheet(presentStudents);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Present Students');
+
+            XLSX.writeFile(workbook, 'Present_Students.xlsx');
+        });
+    </script>
+</body>
+</html>
