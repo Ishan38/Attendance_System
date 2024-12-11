@@ -77,6 +77,20 @@
         .attendance-btn:hover {
             background: #e0a800;
         }
+
+        #process {
+            background: #17a2b8;
+            color: #fff;
+            border: none;
+            padding: 10px;
+            margin-top: 10px;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        #process:hover {
+            background: #138496;
+        }
     </style>
 </head>
 <body>
@@ -84,13 +98,15 @@
         <h1>Student Attendance Management</h1>
     </header>
     <div class="container">
-        <input type="file" id="upload" accept=".xlsx, .xls">
+        <input type="file" id="upload" accept=".xlsx, .xls, .pdf">
+        <button id="process">Process File</button>
         <button id="download">Download Present Students</button>
         <table id="student-table">
             <thead>
                 <tr>
+                    <th>Student ID</th>
                     <th>Name</th>
-                    <th>Grade</th>
+                    <th>Semester</th>
                     <th>Attendance</th>
                 </tr>
             </thead>
@@ -100,11 +116,33 @@
         </table>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.min.js"></script>
     <script>
         let presentStudents = [];
+        let fileToProcess = null;
 
         document.getElementById('upload').addEventListener('change', function(e) {
-            const file = e.target.files[0];
+            fileToProcess = e.target.files[0];
+        });
+
+        document.getElementById('process').addEventListener('click', function() {
+            if (!fileToProcess) {
+                alert('Please upload a file first!');
+                return;
+            }
+
+            const fileType = fileToProcess.name.split('.').pop().toLowerCase();
+
+            if (fileType === 'xlsx' || fileType === 'xls') {
+                handleExcel(fileToProcess);
+            } else if (fileType === 'pdf') {
+                handlePDF(fileToProcess);
+            } else {
+                alert('Unsupported file type! Please upload an Excel or PDF file.');
+            }
+        });
+
+        function handleExcel(file) {
             const reader = new FileReader();
 
             reader.onload = function(e) {
@@ -114,36 +152,70 @@
                 const worksheet = workbook.Sheets[firstSheetName];
                 const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-                const table = document.getElementById('student-table').querySelector('tbody');
-                table.innerHTML = '';
-
-                jsonData.forEach(student => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${student.Name}</td>
-                        <td>${student.Grade}</td>
-                        <td><button class="attendance-btn">Mark Present</button></td>
-                    `;
-
-                    table.appendChild(row);
-
-                    const attendanceBtn = row.querySelector('.attendance-btn');
-                    attendanceBtn.addEventListener('click', function() {
-                        if (this.textContent === 'Mark Present') {
-                            this.textContent = 'Present';
-                            this.style.backgroundColor = '#28a745';
-                            presentStudents.push({ Name: student.Name, Grade: student.Grade });
-                        } else {
-                            this.textContent = 'Mark Present';
-                            this.style.backgroundColor = '#ffc107';
-                            presentStudents = presentStudents.filter(s => s.Name !== student.Name);
-                        }
-                    });
-                });
+                populateTable(jsonData);
             };
 
             reader.readAsArrayBuffer(file);
-        });
+        }
+
+        function handlePDF(file) {
+            const reader = new FileReader();
+
+            reader.onload = async function(e) {
+                const typedArray = new Uint8Array(e.target.result);
+                const pdf = await pdfjsLib.getDocument(typedArray).promise;
+                const data = [];
+
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+
+                    textContent.items.forEach(item => {
+                        const text = item.str.trim();
+                        const match = text.match(/^(===\d{7})\s+(\w+\s\w+)\s+(Semester\s\d+)/);
+
+                        if (match) {
+                            const [, id, name, semester] = match;
+                            data.push({ StudentID: id, Name: name, Semester: semester });
+                        }
+                    });
+                }
+
+                populateTable(data);
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        function populateTable(data) {
+            const table = document.getElementById('student-table').querySelector('tbody');
+            table.innerHTML = '';
+
+            data.forEach(student => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${student.SAPID}</td>
+                    <td>${student.Name}</td>
+                    <td>${student.Semester}</td>
+                    <td><button class="attendance-btn">Mark Present</button></td>
+                `;
+
+                table.appendChild(row);
+
+                const attendanceBtn = row.querySelector('.attendance-btn');
+                attendanceBtn.addEventListener('click', function() {
+                    if (this.textContent === 'Mark Present') {
+                        this.textContent = 'Present';
+                        this.style.backgroundColor = '#28a745';
+                        presentStudents.push(student);
+                    } else {
+                        this.textContent = 'Mark Present';
+                        this.style.backgroundColor = '#ffc107';
+                        presentStudents = presentStudents.filter(s => s.StudentID !== student.StudentID);
+                    }
+                });
+            });
+        }
 
         document.getElementById('download').addEventListener('click', function() {
             if (presentStudents.length === 0) {
